@@ -1,58 +1,98 @@
 import pandas as pd
 import numpy as np
 from tools.data_loader import DataLoader
+from typing import List, Dict
 
-def identify_bottoms(df, window=63):
+def identify_bottoms(df: pd.DataFrame, window: int = 63) -> pd.Series:
+    """
+    Identifies days where the Low is the minimum of the rolling window.
+    """
     rolling_min = df['Low'].rolling(window=window).min()
     is_bottom = (df['Low'] == rolling_min)
     return is_bottom
 
-def is_hammer(row):
-    body = abs(row['Close'] - row['Open'])
-    upper_shadow = row['High'] - max(row['Close'], row['Open'])
-    lower_shadow = min(row['Close'], row['Open']) - row['Low']
-    rng = row['High'] - row['Low']
+def identify_hammers(df: pd.DataFrame) -> pd.Series:
+    """
+    Identifies Hammer candlestick patterns in a vectorized manner.
+    """
+    body = (df['Close'] - df['Open']).abs()
+    upper_shadow = df['High'] - df[['Close', 'Open']].max(axis=1)
+    lower_shadow = df[['Close', 'Open']].min(axis=1) - df['Low']
+    rng = df['High'] - df['Low']
 
-    if rng == 0:
-        return False
+    # Avoid division by zero if needed, though mostly comparison
+    # Conditions:
+    # 1. Lower shadow >= 1.5 * Body
+    # 2. Upper shadow <= 0.1 * Range
 
     cond1 = lower_shadow >= 1.5 * body
-    cond2_alt = upper_shadow <= 0.1 * rng
+    cond2 = upper_shadow <= 0.1 * rng
 
-    return cond1 and cond2_alt
+    # Ensure range is non-zero to be a valid candle for this pattern
+    valid_range = rng > 0
 
-def backtest_strategy_v4(ticker, df):
+    return cond1 & cond2 & valid_range
+
+def backtest_strategy_optimized(ticker: str, df: pd.DataFrame) -> List[Dict]:
+    """
+    Vectorized backtest of the Hammer-at-Bottom strategy.
+    """
+    if len(df) < 63:
+        return []
+
+    # 1. Identify Signals
     is_bottom = identify_bottoms(df)
+    is_hammer_candle = identify_hammers(df)
+
+    # Signal = Is Bottom AND Is Hammer
+    signals = is_bottom & is_hammer_candle
+
+    # Get indices of signals
+    signal_indices = np.where(signals)[0]
 
     trades = []
-    i = 0
 
-    while i < len(df) - 25:
-        if not is_bottom.iloc[i]:
-            i += 1
+    # We still iterate through signals to handle trade management (holding period),
+    # but we skip non-signals efficiently.
+
+    last_exit_idx = -1
+
+    for entry_idx in signal_indices:
+        # We assume we detect pattern at Close of day `entry_idx`.
+        # We buy at Open of day `entry_idx + 1`.
+
+        trade_entry_idx = entry_idx + 1
+
+        if trade_entry_idx >= len(df):
             continue
 
-        bottom_idx = i
+        # Avoid overlapping trades? The prompt didn't specify strict non-overlap,
+        # but typical backtests might manage cash. Here we just log all valid signals
+        # or skip if we are already in a trade?
+        # Let's stick to the previous logic: if we are in a trade, we ignore new signals until exit.
 
-        if is_hammer(df.iloc[bottom_idx]):
-            entry_idx = bottom_idx + 1
-            if entry_idx < len(df):
-                entry_price = df['Open'].iloc[entry_idx]
-                exit_idx = entry_idx + 20
-                if exit_idx < len(df):
-                    exit_price = df['Close'].iloc[exit_idx]
-                    ret = (exit_price - entry_price) / entry_price
-                    trades.append({
-                        'Ticker': ticker,
-                        'BottomDate': df.index[bottom_idx],
-                        'EntryDate': df.index[entry_idx],
-                        'ExitDate': df.index[exit_idx],
-                        'Return': ret
-                    })
-                    i = exit_idx
-                    continue
+        if trade_entry_idx <= last_exit_idx:
+            continue
 
-        i += 1
+        trade_exit_idx = trade_entry_idx + 20
+
+        if trade_exit_idx >= len(df):
+            continue
+
+        entry_price = df['Open'].iloc[trade_entry_idx]
+        exit_price = df['Close'].iloc[trade_exit_idx]
+
+        ret = (exit_price - entry_price) / entry_price
+
+        trades.append({
+            'Ticker': ticker,
+            'BottomDate': df.index[entry_idx],
+            'EntryDate': df.index[trade_entry_idx],
+            'ExitDate': df.index[trade_exit_idx],
+            'Return': ret
+        })
+
+        last_exit_idx = trade_exit_idx
 
     return trades
 
@@ -61,14 +101,12 @@ def main():
     tickers = loader.get_all_tickers()
 
     all_trades = []
-    print(f"Analyzing {len(tickers)} tickers with Hammer Pattern...")
+    print(f"Analyzing {len(tickers)} tickers with Vectorized Hammer Pattern...")
 
     for ticker in tickers:
         try:
             df = loader.load_data(ticker)
-            if len(df) < 100:
-                continue
-            trades = backtest_strategy_v4(ticker, df)
+            trades = backtest_strategy_optimized(ticker, df)
             all_trades.extend(trades)
         except Exception as e:
             print(f"Error processing {ticker}: {e}")
@@ -86,7 +124,7 @@ def main():
     print(f"Average Return: {avg_return:.2%}")
     print(f"Win Rate: {win_rate:.2%}")
 
-    results_df.to_csv('backtest_results_4.csv', index=False)
+    results_df.to_csv('backtest_results_optimized.csv', index=False)
 
 if __name__ == "__main__":
     main()
