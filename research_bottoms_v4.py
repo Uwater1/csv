@@ -124,7 +124,7 @@ def main():
     print(f"Average Return: {avg_return:.2%}")
     print(f"Win Rate: {win_rate:.2%}")
 
-    results_df.to_csv('backtest_results_optimized.csv', index=False)
+    results_df.to_csv('backtest_results_4.csv', index=False)
 
 if __name__ == "__main__":
     main()
