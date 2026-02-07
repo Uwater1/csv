@@ -1,5 +1,5 @@
 import pandas as pd
-import matplotlib.pyplot as plt
+import mplfinance as mpf
 from tools.data_loader import DataLoader
 import os
 
@@ -12,45 +12,56 @@ def plot_trade(trade, loader, save_path):
     df = loader.load_data(ticker)
 
     # Define plot window
-    start_date = bottom_date - pd.Timedelta(days=30)
+    start_date = bottom_date - pd.Timedelta(days=20)
     end_date = exit_date + pd.Timedelta(days=10)
 
     mask = (df.index >= start_date) & (df.index <= end_date)
-    plot_df = df[mask]
+    plot_df = df[mask].copy()
 
     if plot_df.empty:
         print(f"No data for {ticker} around trade dates.")
         return
 
-    plt.figure(figsize=(12, 6))
+    # Add buy and sell markers
+    # Create marker series with NaNs
+    buy_signals = [float('nan')] * len(plot_df)
+    sell_signals = [float('nan')] * len(plot_df)
+    bottom_signals = [float('nan')] * len(plot_df)
 
-    # Plot Candles (Simple Line for now, or bars)
-    # Let's do simple line of Close, and Markers for Bottom/Entry/Exit
-    plt.plot(plot_df.index, plot_df['Close'], label='Close Price', color='black', linewidth=1)
+    # We need to find the exact index location
+    try:
+        if bottom_date in plot_df.index:
+            bottom_signals[plot_df.index.get_loc(bottom_date)] = plot_df.loc[bottom_date, 'Low'] * 0.98
 
-    # Highlight Bottom (Hammer)
-    if bottom_date in plot_df.index:
-        plt.scatter(bottom_date, plot_df.loc[bottom_date, 'Low'], color='orange', label='Hammer Bottom', s=100, marker='^')
+        if entry_date in plot_df.index:
+            buy_signals[plot_df.index.get_loc(entry_date)] = plot_df.loc[entry_date, 'Low'] * 0.99
 
-    # Highlight Entry
-    if entry_date in plot_df.index:
-        plt.scatter(entry_date, plot_df.loc[entry_date, 'Open'], color='green', label='Buy', s=100, marker='o')
+        if exit_date in plot_df.index:
+            sell_signals[plot_df.index.get_loc(exit_date)] = plot_df.loc[exit_date, 'High'] * 1.01
+    except Exception as e:
+        print(f"Error finding indices for plotting: {e}")
 
-    # Highlight Exit
-    if exit_date in plot_df.index:
-        color = 'blue' if trade['Return'] > 0 else 'red'
-        plt.scatter(exit_date, plot_df.loc[exit_date, 'Close'], color=color, label='Sell', s=100, marker='x')
+    # Create additional plots
+    apds = [
+        mpf.make_addplot(buy_signals, type='scatter', markersize=100, marker='^', color='g'),
+        mpf.make_addplot(sell_signals, type='scatter', markersize=100, marker='v', color='r'),
+        mpf.make_addplot(bottom_signals, type='scatter', markersize=50, marker='o', color='orange')
+    ]
 
-    plt.title(f"Trade: {ticker} | Return: {trade['Return']:.2%}")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(save_path)
-    plt.close()
+    title = f"{ticker} Trade | Return: {trade['Return']:.2%}"
+
+    mpf.plot(plot_df, type='candle', style='yahoo',
+             title=title,
+             addplot=apds,
+             volume=True,
+             savefig=save_path,
+             figscale=1.2)
+
     print(f"Saved plot to {save_path}")
 
 def main():
     if not os.path.exists('backtest_results_4.csv'):
-        print("Results file not found.")
+        print("Results file not found. Run research_bottoms_v4.py first.")
         return
 
     df_results = pd.read_csv('backtest_results_4.csv')

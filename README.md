@@ -85,6 +85,21 @@ The pipeline processes financial facts data from SEC EDGAR database and stock pr
 - Removes fact_units with no data in recent quarters
 - Cleans CSV by removing empty rows, resulting in more focused datasets
 
+### 6. Bottom Pattern Research (New)
+
+#### `research_bottoms_v4.py`
+- Identifies "Stop Falling" patterns in stock prices.
+- Detects 3-month lows followed by a "Hammer" candlestick pattern.
+- Backtests this strategy across all tickers in the `price/` directory.
+- Outputs trade results to `backtest_results_4.csv` and summary to `backtest_results_4.txt`.
+
+#### `visualize.py`
+- Generates charts for the best winning trades and worst losing trades from the backtest results.
+- Helps visualize the pattern and trade execution.
+
+#### `tools/data_loader.py`
+- Reusable class to load and preprocess stock data from CSV files.
+
 ## Directory Structure
 
 ```
@@ -95,7 +110,9 @@ csv/
 ├── extract.py                   # Single JSON to CSV converter
 ├── extract_cik_files.py         # CIK-based file filtering
 ├── filter_fact_units.py         # Recent data filter
+├── research_bottoms_v4.py       # Bottom pattern research & backtest
 ├── trasfer.py                   # Data pivoting transformation
+├── visualize.py                 # Trade visualization
 ├── LICENSE
 ├── list.txt
 ├── README.md
@@ -128,13 +145,15 @@ price/
 ├── AAPL.csv                   # Apple stock prices
 ├── MSFT.csv                   # Microsoft stock prices
 ├── ...                        # Other stock price data
+tools/
+├── data_loader.py             # Data loading utility
 ```
 
 ## Usage
 
 ### Prerequisites
 - Python 3.7+
-- Required packages: pandas, yfinance, requests
+- Required packages: pandas, yfinance, requests, matplotlib, numpy, mplfinance
 
 ### Running the Pipeline
 
@@ -167,6 +186,18 @@ price/
    ```bash
    python download_yfinance.py
    ```
+
+7. **Run Bottom Pattern Research:**
+   ```bash
+   python research_bottoms_v4.py
+   ```
+   This will analyze stock data in `price/` and identify Hammer patterns at 3-month lows. Results are saved to `backtest_results_4.csv`.
+
+8. **Visualize Research Results:**
+   ```bash
+   python visualize.py
+   ```
+   This will generate PNG plots for top winning and losing trades found in the backtest.
 
 ## Data Formats
 
