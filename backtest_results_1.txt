@@ -1,0 +1,3 @@
+Total Trades: 10275
+Average Return: 1.64%
+Win Rate: 58.83%
