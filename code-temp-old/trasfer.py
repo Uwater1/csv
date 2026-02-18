@@ -29,9 +29,8 @@ def transfer_facts(csv_path: str):
         # Reset index to make fact_unit a column
         pivot_df = pivot_df.reset_index()
         
-        # Get output filename
-        base_name = os.path.splitext(csv_path)[0]
-        output_path = base_name + '_t.csv'
+        # Get output filename - save to same file (replace original)
+        output_path = csv_path
         
         # Save to CSV
         pivot_df.to_csv(output_path, index=False)

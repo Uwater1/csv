@@ -1,7 +1,7 @@
 """
 Script to download historical stock data from yfinance.
 Reads symbols from 20260105.csv and nq100_unique_symbols.txt.
-Downloads data with period="10y" and interval="1d".
+Downloads data with period="max" and interval="1d".
 """
 
 import pandas as pd
@@ -31,7 +31,7 @@ def read_symbols_from_txt(txt_path: str) -> set:
     return symbols
 
 
-def download_stock_data(symbols: set, period: str = "10y", interval: str = "1d") -> dict:
+def download_stock_data(symbols: set, period: str = "max", interval: str = "1d") -> dict:
     """
     Download historical stock data for given symbols.
     
@@ -54,9 +54,14 @@ def download_stock_data(symbols: set, period: str = "10y", interval: str = "1d")
             ticker = yf.Ticker(symbol)
             df = ticker.history(period=period, interval=interval)
             if not df.empty:
-                df['Symbol'] = symbol
-                results[symbol] = df
-                print(f"OK ({len(df)} rows)")
+                # Filter to only include data from 2002 onwards
+                df = df[df.index >= '2002-01-01']
+                if not df.empty:
+                    results[symbol] = df
+                    print(f"OK ({len(df)} rows)")
+                else:
+                    failed.append(symbol)
+                    print("No data after 2002")
             else:
                 failed.append(symbol)
                 print("No data")
@@ -78,15 +83,20 @@ def save_to_csv(data: dict, output_dir: str = "price"):
     Path(output_dir).mkdir(exist_ok=True)
     
     for symbol, df in data.items():
+        # Drop the Symbol column before saving
+        df_to_save = df.drop(columns=['Symbol'], errors='ignore')
+        # Round numeric columns to 3 decimal places
+        numeric_cols = df_to_save.select_dtypes(include=['float64', 'float32']).columns
+        df_to_save[numeric_cols] = df_to_save[numeric_cols].round(5)
         filepath = os.path.join(output_dir, f"{symbol}.csv")
-        df.to_csv(filepath)
+        df_to_save.to_csv(filepath)
         print(f"Saved: {filepath}")
 
 
 def main():
     # File paths
-    csv_file = "code-temp/20260105.csv"
-    txt_file = "code-temp/nq100_unique_symbols.txt"
+    csv_file = "code-temp-old/20260105.csv"
+    txt_file = "code-temp-old/nq100_unique_symbols.txt"
     output_dir = "price"
     
     # Read symbols from both files
@@ -101,7 +111,7 @@ def main():
     print(f"Total unique symbols: {len(all_symbols)}")
     
     # Download data
-    data = download_stock_data(all_symbols, period="10y", interval="1d")
+    data = download_stock_data(all_symbols, period="max", interval="1d")
     
     print(f"\nSaving data to {output_dir}...")
     save_to_csv(data, output_dir)
