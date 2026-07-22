@@ -7,6 +7,3 @@ env/
 venv/
 .venv/
 *.egg-info/
-dist/
-build/
-.kilo/plans/
